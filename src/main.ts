@@ -22,6 +22,12 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <h1>今天，也为自己积累一点。</h1>
       <p class="intro-note">不必一下子走很远，从今天的一次行动开始。</p>
     </div>
+    <div class="date-navigation">
+      <label for="viewing-date">查看日期</label>
+      <input id="viewing-date" type="date" aria-describedby="date-error" required />
+      <button id="return-today" type="button">返回今天</button>
+    </div>
+    <p id="date-error" role="alert" hidden>只能查看今天或过去的日期。</p>
     <section class="today-summary" aria-label="今日概览">
       <div class="date-block">
         <span class="today-label">今天</span>
@@ -30,7 +36,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
       <div class="progress-block">
         <div class="progress-heading">
-          <span>今日完成</span>
+          <span id="progress-label">今日完成</span>
           <output id="completion-count" aria-label="今日完成数">0 / 3</output>
         </div>
         <progress id="completion-progress" aria-label="今日完成进度" max="3" value="0"></progress>
@@ -67,13 +73,38 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 `;
 
 const dateElement = document.querySelector<HTMLTimeElement>('#recording-date')!;
+const dateInput = document.querySelector<HTMLInputElement>('#viewing-date')!;
+const returnTodayButton = document.querySelector<HTMLButtonElement>('#return-today')!;
+const dateErrorElement = document.querySelector<HTMLParagraphElement>('#date-error')!;
 const countElement = document.querySelector<HTMLOutputElement>('#completion-count')!;
 const progressElement = document.querySelector<HTMLProgressElement>('#completion-progress')!;
 const errorElement = document.querySelector<HTMLParagraphElement>('#save-error')!;
+// null 表示跟随今天；历史查看固定在用户所选的日期。
+let selectedDate: string | null = null;
+
+dateInput.addEventListener('change', () => {
+  const today = recordingDate();
+  dateInput.max = today;
+  if (!dateInput.validity.valid) {
+    dateErrorElement.hidden = false;
+    refresh();
+    return;
+  }
+  selectedDate = dateInput.value !== today ? dateInput.value : null;
+  dateErrorElement.hidden = true;
+  refresh();
+});
+returnTodayButton.addEventListener('click', () => {
+  selectedDate = null;
+  dateErrorElement.hidden = true;
+  refresh();
+});
+
 const habitElements = habits.map(habit => {
   const card = document.querySelector<HTMLElement>(`#${habit.id}`)!;
   const button = card.querySelector<HTMLButtonElement>('button')!;
   button.addEventListener('click', () => {
+    if (selectedDate !== null) return;
     try {
       completeToday(habit.id);
       errorElement.hidden = true;
@@ -86,29 +117,45 @@ const habitElements = habits.map(habit => {
 });
 
 function render(): void {
-  const now = new Date();
-  const date = recordingDate(now);
+  const today = recordingDate();
+  const date = selectedDate ?? today;
+  const isToday = date === today;
+  // 日期输入值是本地自然日，不能按 UTC 午夜解析。
+  const viewingDate = new Date(`${date}T12:00:00`);
   const completed = completedHabits(date);
+  dateInput.max = today;
+  dateInput.value = date;
+  returnTodayButton.disabled = isToday;
   dateElement.dateTime = date;
   dateElement.textContent = new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric', month: 'long', day: 'numeric',
-  }).format(now);
+  }).format(viewingDate);
   document.querySelector('#weekday')!.textContent = new Intl.DateTimeFormat('zh-CN', {
     weekday: 'long',
-  }).format(now);
+  }).format(viewingDate);
+  document.querySelector('.today-summary')!.setAttribute('aria-label', isToday ? '今日概览' : '当日概览');
+  document.querySelector('.today-label')!.textContent = isToday ? '今天' : '历史 · 只读';
+  document.querySelector('#progress-label')!.textContent = isToday ? '今日完成' : '当日完成';
+  countElement.setAttribute('aria-label', isToday ? '今日完成数' : '当日完成数');
+  progressElement.setAttribute('aria-label', isToday ? '今日完成进度' : '当日完成进度');
+  document.querySelector('.section-heading h2')!.textContent = isToday ? '今天的习惯' : '当天的习惯';
+  document.querySelector('.section-heading > span')!.textContent = isToday ? '完成一项，记录一次' : '历史记录仅供查看';
+  document.querySelector('.recording-note')!.textContent = isToday
+    ? '由你判断是否完成。每天记录一次，完成后不可撤销。'
+    : '历史记录只读，不能补记、撤销或编辑。返回今天继续记录。';
   countElement.textContent = `${completed.length} / ${habits.length}`;
   progressElement.value = completed.length;
   document.querySelector('#progress-note')!.textContent = completed.length === habits.length
-    ? '今天的三个习惯，都已留下记录。'
+    ? `${isToday ? '今天' : '当天'}的三个习惯，都已留下记录。`
     : '每一个小小的行动，都算数。';
   for (const { habit, card, button, status } of habitElements) {
     const isComplete = completed.includes(habit.id);
     card.classList.toggle('is-complete', isComplete);
     status.textContent = isComplete ? '已完成' : '未记录';
-    button.disabled = isComplete;
+    button.disabled = !isToday || isComplete;
     button.innerHTML = isComplete
-      ? '<span aria-hidden="true">✓</span> 今日已完成'
-      : '<span aria-hidden="true">＋</span> 标记完成';
+      ? `<span aria-hidden="true">✓</span> ${isToday ? '今日' : '当日'}已完成`
+      : isToday ? '<span aria-hidden="true">＋</span> 标记完成' : '历史只读';
   }
 }
 
@@ -129,7 +176,7 @@ refresh();
 
 // 浏览器后台可能暂停计时器；恢复页面时刷新，点击仍由 completeToday 取当时的记录日。
 window.setInterval(() => {
-  if (dateElement.dateTime !== recordingDate()) refresh();
+  if (dateInput.max !== recordingDate()) refresh();
 }, 1_000);
 window.addEventListener('focus', refresh);
 window.addEventListener('pageshow', refresh);
