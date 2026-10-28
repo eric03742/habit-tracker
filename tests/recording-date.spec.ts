@@ -40,6 +40,9 @@ test('计时器尚未更新页面时，打卡仍按点击时的本地日期记�
   await expect(page.getByRole('status', { name: '今日完成数' })).toHaveText('1 / 3');
   await page.reload();
   await expect(page.getByRole('region', { name: '早睡', exact: true }).getByRole('button')).toBeDisabled();
+  for (const name of ['当前连续天数', '最长连续天数']) {
+    await expect(page.getByRole('region', { name: '早睡', exact: true }).getByRole('status', { name })).toHaveText('1 天');
+  }
 
   await page.clock.setSystemTime(new Date('2026-12-31T12:00:00+08:00'));
   await page.reload();

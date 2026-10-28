@@ -1,4 +1,4 @@
-import { completeToday, completedHabits, habits, recordingDate } from './habits';
+import { completeToday, completedHabits, habits, habitStreaks, recordingDate } from './habits';
 import type { HabitId } from './habits';
 import './style.css';
 
@@ -60,10 +60,21 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <p class="habit-note">${habit.note}</p>
           <p class="habit-status">未记录</p>
           <button type="button"><span aria-hidden="true">＋</span> 标记完成</button>
+          <dl class="habit-streaks" aria-describedby="streak-note">
+            <div>
+              <dt id="${habit.id}-current-label">当前连续天数</dt>
+              <dd><output class="current-streak" aria-labelledby="${habit.id}-current-label">0 天</output></dd>
+            </div>
+            <div>
+              <dt id="${habit.id}-longest-label">最长连续天数</dt>
+              <dd><output class="longest-streak" aria-labelledby="${habit.id}-longest-label">0 天</output></dd>
+            </div>
+          </dl>
         </section>
       `).join('')}
     </div>
     <p class="recording-note">由你判断是否完成。每天记录一次，完成后不可撤销。</p>
+    <p id="streak-note">连续天数不随查看日期改变：当前以今天为准，最长覆盖全部记录。</p>
     <p id="save-error" role="alert" hidden></p>
   </main>
   <footer>
@@ -113,7 +124,12 @@ const habitElements = habits.map(habit => {
       showStorageError('未能保存这次完成记录，请允许浏览器保存网站数据后重试。');
     }
   });
-  return { habit, card, button, status: card.querySelector<HTMLElement>('.habit-status')! };
+  return {
+    habit, card, button,
+    status: card.querySelector<HTMLElement>('.habit-status')!,
+    currentStreak: card.querySelector<HTMLOutputElement>('.current-streak')!,
+    longestStreak: card.querySelector<HTMLOutputElement>('.longest-streak')!,
+  };
 });
 
 function render(): void {
@@ -148,7 +164,7 @@ function render(): void {
   document.querySelector('#progress-note')!.textContent = completed.length === habits.length
     ? `${isToday ? '今天' : '当天'}的三个习惯，都已留下记录。`
     : '每一个小小的行动，都算数。';
-  for (const { habit, card, button, status } of habitElements) {
+  for (const { habit, card, button, status, currentStreak, longestStreak } of habitElements) {
     const isComplete = completed.includes(habit.id);
     card.classList.toggle('is-complete', isComplete);
     status.textContent = isComplete ? '已完成' : '未记录';
@@ -156,6 +172,9 @@ function render(): void {
     button.innerHTML = isComplete
       ? `<span aria-hidden="true">✓</span> ${isToday ? '今日' : '当日'}已完成`
       : isToday ? '<span aria-hidden="true">＋</span> 标记完成' : '历史只读';
+    const streaks = habitStreaks(habit.id, today);
+    currentStreak.textContent = `${streaks.current} 天`;
+    longestStreak.textContent = `${streaks.longest} 天`;
   }
 }
 
