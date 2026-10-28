@@ -13,7 +13,9 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
     "test": "npm run build && playwright test",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "test:tools": "node --test scripts/*.test.js",
+    "check:issues": "node scripts/check-issue-acceptance.js",
+    "check": "npm run lint && npm run typecheck && npm run test:tools && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
