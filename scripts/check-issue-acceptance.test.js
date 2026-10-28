@@ -47,12 +47,14 @@ process.stdout.write(fixture.raw ?? JSON.stringify(response));
 }
 
 test('指定已关闭 Issue 的未勾选验收项会报告原文与链接并退出 1', t => {
-  const result = run(t, { issues: { 3: issue(3, '## Acceptance criteria\n- [x] 已完成\n- [ ] 历史日期只读\n## Notes\n- [ ] 无关事项') } }, ['3']);
-  assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stdout, /#3 验收示例 3：1 项验收未勾选/);
-  assert.match(result.stdout, /issues\/3/);
-  assert.match(result.stdout, /历史日期只读/);
-  assert.doesNotMatch(result.stdout, /无关事项/);
+  for (const args of [['3'], ['--strict', '3']]) {
+    const result = run(t, { issues: { 3: issue(3, '## Acceptance criteria\n- [x] 已完成\n- [ ] 历史日期只读\n## Notes\n- [ ] 无关事项') } }, args);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /#3 验收示例 3：1 项验收未勾选/);
+    assert.match(result.stdout, /issues\/3/);
+    assert.match(result.stdout, /历史日期只读/);
+    assert.doesNotMatch(result.stdout, /无关事项/);
+  }
 });
 
 test('完整审计处理所有分页并排除 PR', t => {
@@ -75,11 +77,57 @@ test('验收全部完成时退出 0，未关闭及无验收标题的 Issue 明�
     1: issue(1, '## Acceptance criteria\n- [ ] 尚未实现', { state: 'OPEN' }),
     2: issue(2, '## acceptance criteria\n- [x] 保存记录\n- [X] 重新访问'),
     3: issue(3, '## Notes\n- [ ] 普通待办'),
-  } }, ['1', '2', '3']);
+    4: issue(4, '## 验收清单\n待整理。'),
+  } }, ['1', '2', '3', '4']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /跳过 #1：尚未关闭/);
   assert.match(result.stdout, /跳过 #3：没有可识别的验收标题/);
-  assert.match(result.stdout, /已检查 1 个已关闭 Issue，跳过 2 个，未勾选验收项 0 个/);
+  assert.match(result.stdout, /已检查 2 个已关闭 Issue，跳过 2 个，未勾选验收项 0 个/);
+});
+
+for (const { name, body, extra, reason } of [
+  { name: '尚未关闭', body: '## 验收清单\n- [x] 已完成', extra: { state: 'OPEN' }, reason: '尚未关闭' },
+  { name: '缺少验收标题', body: '## Notes\n- [x] 普通待办', reason: '没有可识别的验收标题' },
+  { name: '只有验收标题', body: '## 验收清单', reason: '没有有效的验收条目' },
+  { name: '只有说明和样例表', body: '## 验收清单\n待整理。\n\n| 场景 | 预期 |\n| --- | --- |\n| 点击 | 保存 |', reason: '没有有效的验收条目' },
+  { name: '条目仅在代码块或无关章节', body: '## 验收清单\n```markdown\n- [x] 示例\n```\n## Notes\n- [x] 普通待办', reason: '没有有效的验收条目' },
+  { name: '勾选项没有实际内容', body: '## 验收清单\n- [x]    ', reason: '没有有效的验收条目' },
+]) {
+  test(`严格模式拒绝${name}并返回原因和链接`, t => {
+    const result = run(t, { issues: { 1: issue(1, body, extra) } }, ['--strict', '1']);
+    assert.equal(result.status, 1, result.stderr);
+    assert.ok(result.stdout.includes(reason));
+    assert.match(result.stdout, /https:\/\/github.com\/eric03742\/habit-tracker\/issues\/1/);
+    assert.match(result.stdout, /状态或清单结构不合格 1 个/);
+    assert.doesNotMatch(result.stdout, /跳过/);
+  });
+}
+
+test('严格模式接受已关闭且全部完成的清单，支持子节、多种条目格式和重复编号去重', t => {
+  const body = [
+    '## Acceptance criteria', '- [x] 保存记录', '### 浏览器验证', '* [X] 重新访问',
+    '```markdown', '- [ ] 示例', '```', '## 备注', '- [ ] 无关待办',
+    '## 验收标准', '1. [x] 历史只读',
+  ].join('\n');
+  const result = run(t, { issues: {
+    1: issue(1, body),
+    2: issue(2, '## 验收清单\n+ [X] 连续天数', { state: 'closed' }),
+  } }, ['--strict', '1', '1', '2']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /已检查 2 个已关闭 Issue，状态或清单结构不合格 0 个，未勾选验收项 0 个/);
+});
+
+test('严格模式汇总不同 Issue 的结构问题与未完成项，并继续检查其余目标', t => {
+  const result = run(t, { issues: {
+    1: issue(1, '## 验收清单\n- [x] 已完成', { state: 'OPEN' }),
+    2: issue(2, '## 验收标准\n- [x] 保存记录\n- [ ] 历史只读'),
+    3: issue(3, '## 验收清单\n- [X] 连续天数'),
+  } }, ['1', '2', '3', '--strict']);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /#1.*尚未关闭/);
+  assert.match(result.stdout, /#2.*1 项验收未勾选/);
+  assert.match(result.stdout, /- \[ \] 历史只读/);
+  assert.match(result.stdout, /已检查 2 个已关闭 Issue，状态或清单结构不合格 1 个，未勾选验收项 1 个/);
 });
 
 test('中文验收标题覆盖子节和不同任务列表格式，代码块示例与后续章节不计入', t => {
@@ -104,10 +152,13 @@ test('没有已关闭 Issue 时返回可辨识的空结果', t => {
 
 test('GitHub 查询失败或响应损坏时退出 2，不能误报通过', t => {
   for (const fixture of [{ error: 'GitHub authentication failed' }, { raw: 'invalid JSON' }]) {
-    const result = run(t, fixture);
-    assert.equal(result.status, 2);
-    assert.match(result.stderr, /验收清单检查失败/);
-    assert.doesNotMatch(result.stdout, /已检查/);
+    for (const args of [[], ['--strict', '1']]) {
+      const result = run(t, fixture, args);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /验收清单检查失败/);
+      assert.match(result.stderr, fixture.error ? /GitHub authentication failed/ : /JSON/);
+      assert.doesNotMatch(result.stdout, /已检查/);
+    }
   }
 });
 
@@ -116,10 +167,17 @@ test('帮助和非法参数无需访问 GitHub', t => {
   const help = run(t, fixture, ['--help']);
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /用法/);
+  assert.match(help.stdout, /--strict/);
+  const missingTargets = run(t, fixture, ['--strict']);
+  assert.equal(missingTargets.status, 2);
+  assert.match(missingTargets.stderr, /严格模式必须指定至少一个 Issue 编号/);
+  assert.doesNotMatch(missingTargets.stderr, /GitHub must not be called/);
   for (const argument of ['0', '-1', '3;echo', '--repo']) {
-    const result = run(t, fixture, [argument]);
-    assert.equal(result.status, 2);
-    assert.match(result.stderr, /Issue 编号必须是正整数/);
-    assert.doesNotMatch(result.stderr, /GitHub must not be called/);
+    for (const args of [[argument], ['--strict', argument]]) {
+      const result = run(t, fixture, args);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /Issue 编号必须是正整数/);
+      assert.doesNotMatch(result.stderr, /GitHub must not be called/);
+    }
   }
 });

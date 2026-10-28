@@ -11,6 +11,7 @@ function readGitHub(args) {
 function acceptanceItems(body) {
   let sectionLevel = 0;
   let found = false;
+  let total = 0;
   let fence;
   const pending = [];
   for (const line of body.split(/\r?\n/)) {
@@ -31,36 +32,47 @@ function acceptanceItems(body) {
         found = true;
       }
     }
-    const item = line.match(/^\s*(?:[-+*]|\d+[.)])\s+\[ \]\s+(.+)$/);
-    if (sectionLevel && item) pending.push(item[1]);
+    const item = line.match(/^\s*(?:[-+*]|\d+[.)])\s+\[([ xX])\]\s+(.+)$/);
+    if (sectionLevel && item) {
+      if (item[2].trim()) total++;
+      if (item[1] === ' ') pending.push(item[2]);
+    }
   }
-  return { found, pending };
+  return { found, total, pending };
 }
 
 function audit() {
-  const numbers = [...new Set(process.argv.slice(2))];
-  if (numbers.length === 1 && numbers[0] === '--help') {
-    console.log('用法：npm run check:issues [-- <Issue 编号> ...]\n只读检查已关闭 Issue 的验收清单；不传编号则检查全部。退出码：0 无遗漏，1 有遗漏，2 查询或参数错误。');
+  const args = [...new Set(process.argv.slice(2))];
+  if (args.length === 1 && args[0] === '--help') {
+    console.log('用法：npm run check:issues [-- <Issue 编号> ...]\n严格收尾：npm run check:issues -- --strict <Issue 编号> ...\n普通模式只读检查已关闭 Issue 的未勾选验收项；不传编号则检查全部。\n严格模式必须指定编号，要求每个 Issue 已关闭、有有效验收条目且全部勾选。\n退出码：0 满足所选模式的检查条件，1 验收未完成或严格条件不满足，2 查询或参数错误。');
     return 0;
   }
+  const strict = args.includes('--strict');
+  const numbers = args.filter(argument => argument !== '--strict');
   if (numbers.some(number => !/^[1-9]\d*$/.test(number))) throw new Error('Issue 编号必须是正整数。');
+  if (strict && !numbers.length) throw new Error('严格模式必须指定至少一个 Issue 编号。');
   const issues = numbers.length
     ? numbers.map(number => readGitHub(['issue', 'view', number, '--repo', repository, '--json', 'number,title,url,state,body']))
     : readGitHub(['api', '--paginate', '--slurp', `repos/${repository}/issues?state=closed&per_page=100`]).flat().filter(issue => !issue.pull_request);
 
   let checked = 0;
   let skipped = 0;
+  let invalid = 0;
   let leftovers = 0;
   for (const issue of issues) {
-    if (issue.state.toUpperCase() !== 'CLOSED') {
-      console.log(`跳过 #${issue.number}：尚未关闭。`);
-      skipped++;
-      continue;
-    }
-    const { found, pending } = acceptanceItems(issue.body ?? '');
-    if (!found) {
-      console.log(`跳过 #${issue.number}：没有可识别的验收标题。`);
-      skipped++;
+    const { found, total, pending } = acceptanceItems(issue.body ?? '');
+    const reason = issue.state.toUpperCase() !== 'CLOSED' ? '尚未关闭'
+      : !found ? '没有可识别的验收标题'
+      : strict && !total ? '没有有效的验收条目'
+      : undefined;
+    if (reason) {
+      if (strict) {
+        console.log(`#${issue.number} ${issue.title}：${reason}。\n${issue.html_url ?? issue.url}`);
+        invalid++;
+      } else {
+        console.log(`跳过 #${issue.number}：${reason}。`);
+        skipped++;
+      }
       continue;
     }
     checked++;
@@ -70,8 +82,10 @@ function audit() {
       leftovers += pending.length;
     }
   }
-  console.log(`已检查 ${checked} 个已关闭 Issue，跳过 ${skipped} 个，未勾选验收项 ${leftovers} 个。`);
-  return leftovers ? 1 : 0;
+  console.log(strict
+    ? `严格模式：已检查 ${checked} 个已关闭 Issue，状态或清单结构不合格 ${invalid} 个，未勾选验收项 ${leftovers} 个。`
+    : `已检查 ${checked} 个已关闭 Issue，跳过 ${skipped} 个，未勾选验收项 ${leftovers} 个。`);
+  return leftovers || invalid ? 1 : 0;
 }
 
 try {

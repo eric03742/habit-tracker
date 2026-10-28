@@ -74,8 +74,11 @@ Issue 收尾时，可使用已登录的 GitHub CLI 只读检查已关闭 Issue �
 ```bash
 npm run check:issues          # 检查全部已关闭 Issue
 npm run check:issues -- 3 4   # 仅检查指定 Issue
+npm run check:issues -- --strict 1 2 3 4  # 关闭后严格核对指定 Issue
 npm run test:tools           # 离线验证检查工具，无需 GitHub 登录
 ```
+
+严格模式必须指定 Issue 编号，要求每个目标已关闭、在可识别的验收章节中至少有一条非空的任务列表条目，且所有验收项均已勾选；未满足条件返回退出码 1，参数或 GitHub 查询失败返回 2。普通模式继续报告跳过项。两种模式均只读，实际功能的通过证据仍需逐项核对。
 
 证据核对、清单同步和检查命令的判定范围见 [Issue 工作流](docs/agents/issue-tracker.md#acceptance-closeout)。
 
