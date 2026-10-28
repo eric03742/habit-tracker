@@ -55,6 +55,9 @@ h3 { margin: 25px 0 9px; font-size: 22px; font-weight: 550; letter-spacing: 1px;
 .habit-note { margin: 0; color: #74806f; font-size: 12px; line-height: 1.8; }
 .habit-status { margin: 27px 0 13px; color: #788471; font-size: 12px; }
 .habit-status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border: 1px solid #98a28f; border-radius: 50%; vertical-align: 1px; }
+.habit-streaks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 22px 0 0; padding-top: 18px; border-top: 1px solid #e0e6db; }
+.habit-streaks dt { color: #687960; font-size: 11px; line-height: 1.8; }
+.habit-streaks dd { margin: 6px 0 0; }
 button { width: 100%; min-height: 43px; padding: 10px; border: 1px solid #d8e1d2; border-radius: 8px; background: #f6f8f0; color: #456041; cursor: pointer; font-size: 13px; transition: background .15s; }
 button:hover:not(:disabled) { background: #e8efdf; border-color: #a5ba94; }
 button span { margin-right: 4px; }
@@ -63,6 +66,7 @@ button span { margin-right: 4px; }
 .is-complete .habit-status::before { border-color: #658b4c; background: #658b4c; }
 button:disabled { background: #e7eedc; border-color: transparent; color: #547041; cursor: default; }
 .recording-note { margin: 21px 0 0; color: #788370; font-size: 11px; text-align: center; line-height: 1.8; }
+#streak-note { margin: 6px 0 0; color: #687960; font-size: 11px; text-align: center; line-height: 1.8; }
 #save-error, #date-error { color: #a13a2c; font-size: 13px; line-height: 1.8; }
 footer { display: flex; justify-content: space-between; gap: 20px; margin: 55px 0 30px; padding-top: 22px; border-top: 1px solid #e2e7dc; color: #7c8776; font-size: 11px; }
 .local-dot { display: inline-block; width: 5px; height: 5px; margin-right: 7px; border-radius: 50%; background: #7a9470; vertical-align: 2px; }
