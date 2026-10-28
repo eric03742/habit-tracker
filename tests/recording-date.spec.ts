@@ -61,5 +61,9 @@ test.describe('美国西海岸时区', () => {
     await page.reload();
     await expect(page.getByText('2026年10月28日', { exact: true })).toBeVisible();
     await expect(page.getByRole('status', { name: '今日完成数' })).toHaveText('0 / 3');
+    await page.getByLabel('查看日期').fill('2026-10-27');
+    await expect(page.getByText('2026年10月27日', { exact: true })).toBeVisible();
+    await expect(page.getByRole('status', { name: '当日完成数' })).toHaveText('1 / 3');
+    await expect(page.getByRole('region', { name: '早睡', exact: true }).getByText('已完成', { exact: true })).toBeVisible();
   });
 });
