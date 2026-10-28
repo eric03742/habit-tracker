@@ -51,7 +51,7 @@ npx playwright install chromium
 npm run check
 ```
 
-`npm run check` 依次执行 ESLint、TypeScript 类型检查，再通过 `npm test` 完成一次 Vite 生产构建和全部 Playwright 浏览器验收测试；任一步失败都返回非零退出码并停止后续步骤。
+`npm run check` 依次执行 ESLint、TypeScript 类型检查、维护工具的离线命令行测试，再通过 `npm test` 完成一次 Vite 生产构建和全部 Playwright 浏览器验收测试；任一步失败都返回非零退出码并停止后续步骤。
 
 单独运行浏览器测试（每次先构建最新代码，再自动启动生产预览服务，测试端口为 4173；构建失败时不会运行测试）：
 
@@ -69,9 +69,20 @@ npx playwright show-report
 
 GitHub Actions 在 PR 创建或更新、推送 `master` 时运行，使用 `npm ci`、`npx playwright install --with-deps chromium` 和同一条 `npm run check`。浏览器测试报告作为工作流产物保留 7 天。
 
+Issue 收尾时，可使用已登录的 GitHub CLI 只读检查已关闭 Issue 中遗漏勾选的验收项：
+
+```bash
+npm run check:issues          # 检查全部已关闭 Issue
+npm run check:issues -- 3 4   # 仅检查指定 Issue
+npm run test:tools           # 离线验证检查工具，无需 GitHub 登录
+```
+
+证据核对、清单同步和检查命令的判定范围见 [Issue 工作流](docs/agents/issue-tracker.md#acceptance-closeout)。
+
 ## 代码位置
 
 - `src/`：页面、记录规则及本地持久化。
 - `tests/`：浏览器页面验收测试。
+- `scripts/`：Issue 验收清单检查工具及其离线命令行测试。
 - `.github/workflows/check.yml`：统一检查工作流。
 - `GLOSSARY.md`：领域术语及统计口径。
