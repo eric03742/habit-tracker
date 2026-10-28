@@ -44,12 +44,11 @@ npx playwright install chromium
 npm run check
 ```
 
-`npm run check` 依次执行 ESLint、TypeScript 类型检查、Vite 生产构建和全部 Playwright 浏览器验收测试；任一步失败都返回非零退出码并停止后续步骤。
+`npm run check` 依次执行 ESLint、TypeScript 类型检查，再通过 `npm test` 完成一次 Vite 生产构建和全部 Playwright 浏览器验收测试；任一步失败都返回非零退出码并停止后续步骤。
 
-单独运行浏览器测试（自动启动生产预览服务，测试端口为 4173）：
+单独运行浏览器测试（每次先构建最新代码，再自动启动生产预览服务，测试端口为 4173；构建失败时不会运行测试）：
 
 ```bash
-npm run build
 npm test
 # 调试某个文件或查看报告
 npm test -- tests/today.spec.ts
