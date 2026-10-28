@@ -1,29 +1,29 @@
 import { execFileSync } from 'node:child_process';
 import console from 'node:console';
 import process from 'node:process';
+import MarkdownIt from 'markdown-it';
 
 const repository = 'eric03742/habit-tracker';
+const markdown = new MarkdownIt();
 
 function readGitHub(args) {
   return JSON.parse(execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }));
 }
 
 function acceptanceItems(body) {
+  // 代码块的缩进取决于列表层级，用 Markdown 块的行区间排除示例。
+  const codeLineNumbers = new Set();
+  for (const token of markdown.parse(body, {})) {
+    if (token.type === 'fence' || token.type === 'code_block') {
+      for (let index = token.map[0]; index < token.map[1]; index++) codeLineNumbers.add(index);
+    }
+  }
   let sectionLevel = 0;
   let found = false;
   let total = 0;
-  let fence;
   const pending = [];
-  for (const line of body.split(/\r?\n/)) {
-    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
-    if (fence) {
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = undefined;
-      continue;
-    }
-    if (marker) {
-      fence = marker[1];
-      continue;
-    }
+  for (const [index, line] of body.split(/\r\n?|\n/).entries()) {
+    if (codeLineNumbers.has(index)) continue;
     const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
     if (heading) {
       if (heading[1].length <= sectionLevel) sectionLevel = 0;

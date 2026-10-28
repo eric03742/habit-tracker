@@ -117,6 +117,71 @@ test('严格模式接受已关闭且全部完成的清单，支持子节、多�
   assert.match(result.stdout, /已检查 2 个已关闭 Issue，状态或清单结构不合格 0 个，未勾选验收项 0 个/);
 });
 
+test('严格模式拒绝只有列表内围栏代码示例的验收清单', t => {
+  const body = [
+    '## 验收清单', '- 示例说明', '',
+    '    ```markdown', '    - [x] 示例条目', '    ```',
+  ].join('\n');
+  const result = run(t, { issues: { 1: issue(1, body) } }, ['--strict', '1']);
+  assert.equal(result.status, 1, result.stdout || result.stderr);
+  assert.match(result.stdout, /没有有效的验收条目/);
+});
+
+for (const { name, lines } of [
+  { name: '无空行和语言标记的列表围栏', lines: ['- 示例说明', '    ```', '    - [x] 示例条目', '    ```'] },
+  { name: '有序列表中的围栏', lines: ['10. 示例说明', '', '    ```markdown', '    - [X] 示例条目', '    ```'] },
+  { name: '嵌套列表中的波浪号围栏', lines: ['- 外层说明', '  - 内层说明', '', '      ~~~markdown', '      - [x] 示例条目', '      ~~~~'] },
+  { name: '制表符缩进的列表围栏', lines: ['- 示例说明', '', '\t```markdown', '\t- [x] 示例条目', '\t```'] },
+  { name: '缩进代码块', lines: ['', '    - [x] 示例条目'] },
+]) {
+  test(`严格模式拒绝只有${name}的验收清单`, t => {
+    const body = ['## 验收清单', ...lines].join('\n');
+    const result = run(t, { issues: { 1: issue(1, body) } }, ['--strict', '1']);
+    assert.equal(result.status, 1, result.stdout || result.stderr);
+    assert.match(result.stdout, /没有有效的验收条目/);
+  });
+}
+
+test('两种模式都忽略列表围栏中的未勾选示例并保留后续真实条目', t => {
+  for (const checked of ['x', ' ']) {
+    const body = [
+      '## 验收清单', '- 示例说明', '',
+      '    ```markdown', '    - [ ] 示例条目', '    ## 备注', '    ```',
+      `- [${checked}] 真实验收项`,
+    ].join('\r\n');
+    for (const args of [['1'], ['--strict', '1']]) {
+      const result = run(t, { issues: { 1: issue(1, body) } }, args);
+      assert.equal(result.status, checked === 'x' ? 0 : 1, result.stdout || result.stderr);
+      assert.doesNotMatch(result.stdout, /示例条目|没有有效的验收条目/);
+      if (checked === ' ') {
+        assert.match(result.stdout, /1 项验收未勾选/);
+        assert.match(result.stdout, /真实验收项/);
+      }
+    }
+  }
+});
+
+test('列表围栏随列表项结束，不吞掉其后的真实嵌套验收项', t => {
+  const body = [
+    '## 验收清单', '- 示例说明', '    ```markdown', '    - [x] 示例条目',
+    '- 真实清单', '  - [x] 已完成验收', '  - [ ] 待完成验收',
+  ].join('\n');
+  const result = run(t, { issues: { 1: issue(1, body) } }, ['--strict', '1']);
+  assert.equal(result.status, 1, result.stdout || result.stderr);
+  assert.match(result.stdout, /1 项验收未勾选/);
+  assert.match(result.stdout, /待完成验收/);
+  assert.doesNotMatch(result.stdout, /示例条目|没有有效的验收条目/);
+});
+
+test('顶层围栏内的四空格伪结束标记不会暴露代码示例', t => {
+  const body = [
+    '## 验收清单', '```markdown', '    ```', '- [ ] 示例条目', '```', '- [x] 真实验收项',
+  ].join('\n');
+  const result = run(t, { issues: { 1: issue(1, body) } }, ['--strict', '1']);
+  assert.equal(result.status, 0, result.stdout || result.stderr);
+  assert.doesNotMatch(result.stdout, /示例条目|没有有效的验收条目/);
+});
+
 test('严格模式汇总不同 Issue 的结构问题与未完成项，并继续检查其余目标', t => {
   const result = run(t, { issues: {
     1: issue(1, '## 验收清单\n- [x] 已完成', { state: 'OPEN' }),
